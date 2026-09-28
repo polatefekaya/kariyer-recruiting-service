@@ -1,0 +1,17 @@
+<Project>
+
+  <!-- The Web SDK globs `**\*.json` into Content, and its props are imported BEFORE
+       Directory.Build.props, so a DefaultItemExcludes set there arrives too late to stop it.
+       The SDK's own exclusions are written with backslashes (`bin\/**`), which match nothing on
+       macOS or Linux — so the build's own output becomes source content, and each build copies
+       bin into bin/Debug/net10.0/bin/… one level deeper until the path is too long to build.
+
+       Removing the items here works because Directory.Build.targets is imported after the
+       project body, once every glob has been evaluated. -->
+  <ItemGroup>
+    <Content Remove="$(BaseOutputPath)**" />
+    <None Remove="$(BaseOutputPath)**" />
+    <Compile Remove="$(BaseOutputPath)**" />
+  </ItemGroup>
+
+</Project>

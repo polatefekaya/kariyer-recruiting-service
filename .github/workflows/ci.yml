@@ -1,0 +1,147 @@
+# Build and test on every push and pull request.
+#
+# The integration suite is NOT optional here and is not split into a separate opt-in job.
+# What it covers cannot be checked any other way. Two examples that this repository has
+# already been burned by: a stage move is only durable because the aggregate is loaded
+# TRACKED — with the context's NoTracking default, the second move of an application was
+# silently dropped, and every unit test still passed. And the candidate's accept/decline
+# links carry no session at all: whether a tampered, replayed or stale token can change
+# `confirmation_status` is a property of the handler plus the database, not of either alone.
+#
+# Testcontainers needs a Docker daemon; ubuntu-latest runners ship one.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Kariyer.Messaging.Contracts is hosted on GitHub Packages; restore cannot resolve the
+  # shared contracts without read access to it.
+  packages: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          # Matches Directory.Build.props. global.json is absent, so this is what pins the SDK.
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        # nuget.config reads these two by name for the GitHub Packages source. GITHUB_TOKEN
+        # is scoped to this run and expires with it.
+        env:
+          GITHUB_USER: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet restore Kariyer.Recruiting.slnx
+
+      - name: Build
+        run: dotnet build Kariyer.Recruiting.slnx --configuration Release --no-restore
+
+      - name: Test — domain (stage transitions, interview rules, Turkish casing)
+        run: >
+          dotnet test tests/Kariyer.Recruiting.Domain.Tests
+          --configuration Release --no-build
+          --logger "trx;LogFileName=domain.trx" --results-directory artifacts/test-results
+
+      - name: Test — integration (Testcontainers Postgres)
+        run: >
+          dotnet test tests/Kariyer.Recruiting.IntegrationTests
+          --configuration Release --no-build
+          --logger "trx;LogFileName=integration.trx" --results-directory artifacts/test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/test-results
+          retention-days: 14
+
+  # The schema is committed as DDL so it can be applied by hand in environments that do not
+  # run migrations on startup. A dump that has drifted from the migrations is worse than no
+  # dump: it looks authoritative. Regenerating it here and diffing catches the drift on the
+  # commit that causes it.
+  schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        env:
+          GITHUB_USER: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet restore Kariyer.Recruiting.slnx
+
+      - name: Regenerate and compare
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.3
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          head -20 docs/schema.sql > /tmp/header.sql
+          dotnet ef migrations script --project src/Kariyer.Recruiting.Api --idempotent -o /tmp/body.sql
+          # dotnet ef writes a BOM; psql reads it as part of the first statement and fails.
+          cat /tmp/header.sql /tmp/body.sql | perl -CSD -pe 's/\x{FEFF}//g' > /tmp/schema.sql
+          diff -u docs/schema.sql /tmp/schema.sql || {
+            echo "::error::docs/schema.sql is out of date. Regenerate it — see the header of that file."
+            exit 1
+          }
+
+  # A broken Dockerfile is a deploy-time failure that no test catches, so the image is built
+  # on every run. It is not pushed — this proves it compiles, nothing more.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          build-args: |
+            GITHUB_USER=${{ github.actor }}
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

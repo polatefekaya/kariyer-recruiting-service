@@ -1,0 +1,55 @@
+name: kariyer-recruiting-service
+
+# Production stack.
+#
+# Host networking, matching kariyer-file-service and the addressing the YARP gateway already
+# uses: it reaches upstreams at 127.0.0.1:<port>, so a bridge network with published ports would
+# put the service somewhere the gateway cannot see. Postgres, RabbitMQ, Garnet and the OTel
+# collector are the shared ones on the host, exactly as .env specifies.
+#
+#   cp .env.example .env    # then fill it in
+#   psql "$RECRUITING_DB" -f docs/schema.sql
+#   docker compose up -d --build
+#   # -> http://127.0.0.1:5340/health/live
+#
+# THE PORT MATTERS BEYOND THIS FILE. 5340 is what the gateway's recruitingCluster destination
+# points at in kariyer-identity-security-service (the block to add is in docs/DEPLOYMENT.md).
+# Change one and you must change the other, or /api/recruiting answers 502 with nothing in this
+# service's logs to explain it.
+#
+# Every replica is identical and serves traffic: there is no singleton work here — the outbox is
+# drained under a row lock and the cache is shared. Scaling past one means leaving host
+# networking for a bridge network behind a load balancer.
+
+services:
+  recruiting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GITHUB_USER: ${GITHUB_USER}
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+    image: kariyer-recruiting-service:latest
+    container_name: kariyer-recruiting
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      # Host networking means no port mapping, so the listen port IS the host port.
+      ASPNETCORE_HTTP_PORTS: 5340
+      HEALTHCHECK_URL: http://localhost:5340/health/live
+    healthcheck:
+      # Re-enters the same binary; these images carry no curl. Liveness only — readiness needs
+      # Postgres and RabbitMQ, and a container runtime that fails a health check RESTARTS the
+      # container, which would turn a brief database blip into a restart loop.
+      test: ['CMD', 'dotnet', '/app/Kariyer.Recruiting.Api.dll', '--healthcheck']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: '20m'
+        max-file: '5'

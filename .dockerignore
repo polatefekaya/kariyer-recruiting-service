@@ -1,0 +1,52 @@
+# Keep the build context small and, more importantly, keep secrets and local state out of
+# it. Anything listed here cannot end up in an image layer by accident.
+
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.idea/
+
+# Build output written under a literal backslash name.
+#
+# Some tooling — the Roslyn BuildHost behind an editor's language server, in practice — emits a
+# Windows-style relative path on a POSIX filesystem, creating a single directory actually NAMED
+# "bin\Debug" rather than the nested bin/Debug above. The `**/bin/` rule does not match it: that
+# is a different name.
+#
+# This is not cosmetic. Left in the context it is COPIED into the build stage, and MSBuild's
+# default resource glob then fails enumerating a directory whose name contains a backslash:
+#
+#   error MSB3552: Resource file "**/*.resx" cannot be found.
+#
+# — a failure with nothing to do with resources, which appears only in the container build and
+# only on a machine that happens to have opened the project in an editor. The same rule exists
+# in .gitignore for the same reason.
+**/bin\\Debug/
+**/bin\\Release/
+**/obj\\Debug/
+**/obj\\Release/
+
+.git/
+.github/
+.claude/
+
+tests/
+docs/
+deploy/
+README.md
+
+**/*.user
+**/*.suo
+**/.DS_Store
+
+# Credentials and local overrides. .env in particular holds the GitHub Packages token —
+# keeping it out of the context matters because the Dockerfile now takes that token as a
+# build arg, so nothing here should also ship it as a file.
+.env
+**/.env
+**/appsettings.Development.json
+**/appsettings.Local.json
+
+Dockerfile*
+docker-compose*.yml

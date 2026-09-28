@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!-- Keeps the build's own output out of every glob that respects this. The Web SDK's json
+         glob does not — see Directory.Build.targets, which removes those items afterwards. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+
+    <!-- Invariant globalization is deliberately NOT enabled, for the same reason as the CMS
+         service: this service stores and searches Turkish candidate names and free-text notes.
+         Under invariant globalization `ToLowerInvariant('İ')` does not fold to 'i', so a
+         recruiter searching "İnci" would or would not match "inci" depending on whether ICU
+         happened to be in the image — and a search that silently misses candidates is worse
+         than a slightly larger container. Domain/Search/TurkishCasing folds the four
+         dotted/dotless letters explicitly so the fold itself does not depend on a culture being
+         installed; ICU is kept so ordering matches a developer's machine. -->
+  </PropertyGroup>
+</Project>

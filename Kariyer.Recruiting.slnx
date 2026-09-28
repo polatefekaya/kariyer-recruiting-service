@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Kariyer.Recruiting.Api/Kariyer.Recruiting.Api.csproj" />
+    <Project Path="src/Kariyer.Recruiting.Domain/Kariyer.Recruiting.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Kariyer.Recruiting.Domain.Tests/Kariyer.Recruiting.Domain.Tests.csproj" />
+    <Project Path="tests/Kariyer.Recruiting.IntegrationTests/Kariyer.Recruiting.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
