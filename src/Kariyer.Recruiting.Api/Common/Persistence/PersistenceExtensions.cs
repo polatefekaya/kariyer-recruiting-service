@@ -40,13 +40,68 @@ public static class PersistenceExtensions
 
     public static async Task MigrateAsync(this WebApplication app)
     {
-        if (!app.Services.GetRequiredService<IOptions<PersistenceOptions>>().Value.MigrateOnStartup)
+        using IServiceScope scope = app.Services.CreateScope();
+        RecruitingDbContext db = scope.ServiceProvider.GetRequiredService<RecruitingDbContext>();
+
+        if (app.Services.GetRequiredService<IOptions<PersistenceOptions>>().Value.MigrateOnStartup)
         {
-            return;
+            await db.Database.MigrateAsync();
         }
 
-        using IServiceScope scope = app.Services.CreateScope();
+        await EnsureLegacyStageFunctionAsync(db);
+    }
 
-        await scope.ServiceProvider.GetRequiredService<RecruitingDbContext>().Database.MigrateAsync();
+    private static async Task EnsureLegacyStageFunctionAsync(RecruitingDbContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value text)
+            RETURNS text
+            LANGUAGE sql
+            IMMUTABLE
+            PARALLEL SAFE
+            AS $$
+                SELECT CASE lower(coalesce(value, ''))
+                    WHEN 'pending'      THEN 'NEW'
+                    WHEN 'under_review' THEN 'REVIEWING'
+                    WHEN 'accepted'     THEN 'HIRED'
+                    WHEN 'rejected'     THEN 'REJECTED'
+                    WHEN 'withdrawn'    THEN 'WITHDRAWN'
+                    ELSE 'NEW'
+                END;
+            $$;
+
+            CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value anyelement)
+            RETURNS text
+            LANGUAGE sql
+            IMMUTABLE
+            PARALLEL SAFE
+            AS $$
+                SELECT recruiting.kz_stage_from_legacy(value::text);
+            $$;
+
+            DO $$
+            DECLARE
+                v_schema text;
+            BEGIN
+                SELECT n.nspname INTO v_schema
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE t.typname = 'enum_job_application_application_status'
+                LIMIT 1;
+
+                IF v_schema IS NOT NULL THEN
+                    EXECUTE format('
+                        CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value %I.enum_job_application_application_status)
+                        RETURNS text
+                        LANGUAGE sql
+                        IMMUTABLE
+                        PARALLEL SAFE
+                        AS $func$
+                            SELECT recruiting.kz_stage_from_legacy(value::text);
+                        $func$;
+                    ', v_schema);
+                END IF;
+            END $$;
+            """);
     }
 }

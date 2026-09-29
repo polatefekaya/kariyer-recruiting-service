@@ -295,6 +295,15 @@ BEGIN
             ELSE 'NEW'
         END;
     $$;
+
+    CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value anyelement)
+    RETURNS text
+    LANGUAGE sql
+    IMMUTABLE
+    PARALLEL SAFE
+    AS $$
+        SELECT recruiting.kz_stage_from_legacy(value::text);
+    $$;
     END IF;
 END $EF$;
 

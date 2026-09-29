@@ -80,4 +80,47 @@ public sealed class SchemaTests(RecruitingDatabase database)
 
         Assert.True(await db.Companies.AnyAsync(c => c.Uid == "c-projection"));
     }
+
+
+    [Fact]
+    public async Task Kz_stage_from_legacy_works_when_both_exist()
+    {
+        await database.ExecuteAsync(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_job_application_application_status') THEN
+                    CREATE TYPE enum_job_application_application_status AS ENUM ('pending', 'under_review', 'accepted', 'rejected', 'withdrawn');
+                END IF;
+            END $$;
+
+            CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value text)
+            RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+                SELECT CASE lower(coalesce(value, ''))
+                    WHEN 'pending'      THEN 'NEW'
+                    WHEN 'under_review' THEN 'REVIEWING'
+                    WHEN 'accepted'     THEN 'HIRED'
+                    WHEN 'rejected'     THEN 'REJECTED'
+                    WHEN 'withdrawn'    THEN 'WITHDRAWN'
+                    ELSE 'NEW'
+                END;
+            $$;
+
+            CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value anyelement)
+            RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+                SELECT recruiting.kz_stage_from_legacy(value::text);
+            $$;
+            """);
+
+        string? resEnum = await database.ScalarAsync<string>("SELECT recruiting.kz_stage_from_legacy('under_review'::enum_job_application_application_status)");
+        string? resText = await database.ScalarAsync<string>("SELECT recruiting.kz_stage_from_legacy('accepted'::text)");
+        string? resVarchar = await database.ScalarAsync<string>("SELECT recruiting.kz_stage_from_legacy('withdrawn'::varchar)");
+        string? resUnknown = await database.ScalarAsync<string>("SELECT recruiting.kz_stage_from_legacy('pending')");
+
+        Assert.Equal("REVIEWING", resEnum);
+        Assert.Equal("HIRED", resText);
+        Assert.Equal("WITHDRAWN", resVarchar);
+        Assert.Equal("NEW", resUnknown);
+    }
+
 }
