@@ -72,7 +72,7 @@ public sealed class SchemaTests(RecruitingDatabase database)
         await database.ExecuteAsync(
             """
             INSERT INTO public.company (uid, external_id, company_name)
-            VALUES ('c-projection', 'sub-projection', 'PSB')
+            VALUES ('c-projection', '00000000-0000-0000-0000-000000000001', 'PSB')
             ON CONFLICT (uid) DO NOTHING;
             """);
 

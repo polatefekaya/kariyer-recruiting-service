@@ -101,12 +101,14 @@ public sealed class SeedStandInsHandler(
             ? auth.Value.DevIdentity.ExternalId
             : (seed.Company.ExternalId ?? seed.Company.Uid);
 
+        Guid? externalGuid = Guid.TryParse(externalId, out Guid g) ? g : null;
+
         if (auth.Value.DevIdentity.Enabled)
         {
             await db.Database.ExecuteSqlAsync(
                 $"""
                  UPDATE public.company SET external_id = NULL
-                 WHERE external_id = {externalId} AND uid <> {seed.Company.Uid};
+                 WHERE external_id = {externalGuid} AND uid <> {seed.Company.Uid};
                  """,
                 cancellationToken);
         }
@@ -114,7 +116,7 @@ public sealed class SeedStandInsHandler(
         await db.Database.ExecuteSqlAsync(
             $"""
              INSERT INTO public.company (uid, external_id, company_name, status, is_account_completed)
-             VALUES ({seed.Company.Uid}, {externalId}, {seed.Company.Name}, 'approved', true)
+             VALUES ({seed.Company.Uid}, {externalGuid}, {seed.Company.Name}, 'approved', true)
              ON CONFLICT (uid) DO UPDATE
                SET external_id = EXCLUDED.external_id,
                    company_name = EXCLUDED.company_name,

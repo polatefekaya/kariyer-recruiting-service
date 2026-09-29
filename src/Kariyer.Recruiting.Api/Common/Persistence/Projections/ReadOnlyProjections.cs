@@ -74,7 +74,7 @@ public sealed record CompanyProjection
 {
     public string Uid { get; init; } = string.Empty;
 
-    public string? ExternalId { get; init; }
+    public Guid? ExternalId { get; init; }
 
     public string? CompanyName { get; init; }
 

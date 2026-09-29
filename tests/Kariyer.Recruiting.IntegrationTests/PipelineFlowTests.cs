@@ -41,7 +41,7 @@ public sealed class PipelineFlowTests(RecruitingDatabase database) : IAsyncLifet
     public async Task InitializeAsync() => await database.ExecuteAsync(
         $"""
          INSERT INTO public.company (uid, external_id, company_name)
-         VALUES ('{Company}', 'sub-flow', 'PSB Teknoloji') ON CONFLICT (uid) DO NOTHING;
+         VALUES ('{Company}', '00000000-0000-0000-0000-000000000002', 'PSB Teknoloji') ON CONFLICT (uid) DO NOTHING;
 
          INSERT INTO public.employee (uid, name, surname, email)
          VALUES ('{Candidate}', 'Ayşe', 'Şimşek', 'ayse@example.com') ON CONFLICT (uid) DO NOTHING;

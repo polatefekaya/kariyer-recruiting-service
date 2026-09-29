@@ -42,9 +42,18 @@ public sealed class CompanyContextResolver(
             return (cached, null);
         }
 
-        var company = await db.Companies
-            .AsNoTracking()
-            .Where(c => c.ExternalId == externalId || c.Uid == externalId)
+        var query = db.Companies.AsNoTracking();
+
+        if (Guid.TryParse(externalId, out Guid parsedGuid))
+        {
+            query = query.Where(c => c.ExternalId == parsedGuid || c.Uid == externalId);
+        }
+        else
+        {
+            query = query.Where(c => c.Uid == externalId);
+        }
+
+        var company = await query
             .Select(c => new { c.Uid, c.CompanyName, c.Status, c.IsAccountCompleted })
             .FirstOrDefaultAsync(cancellationToken);
 

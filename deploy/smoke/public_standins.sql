@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.__standin_marker (created_at timestamptz NOT N
 
 CREATE TABLE IF NOT EXISTS public.company (
     uid                   varchar(128) PRIMARY KEY,
-    external_id           varchar(128),
+    external_id           uuid,
     company_name          varchar(512),
     status                varchar(64)  NOT NULL DEFAULT 'approved',
     is_account_completed  boolean      NOT NULL DEFAULT true

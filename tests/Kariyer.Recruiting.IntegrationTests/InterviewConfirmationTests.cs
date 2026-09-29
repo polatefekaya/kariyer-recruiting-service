@@ -23,7 +23,7 @@ public sealed class InterviewConfirmationTests(RecruitingDatabase database) : IA
     public async Task InitializeAsync() => await database.ExecuteAsync(
         $"""
          INSERT INTO public.company (uid, external_id, company_name)
-         VALUES ('{Company}', 'sub-confirm', 'PSB Teknoloji') ON CONFLICT (uid) DO NOTHING;
+         VALUES ('{Company}', '00000000-0000-0000-0000-000000000003', 'PSB Teknoloji') ON CONFLICT (uid) DO NOTHING;
 
          INSERT INTO public.employee (uid, name, surname, email)
          VALUES ('{Candidate}', 'Deniz', 'Yücel', 'deniz@example.com') ON CONFLICT (uid) DO NOTHING;

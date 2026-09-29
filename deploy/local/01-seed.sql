@@ -5,7 +5,7 @@
 \i /docker-entrypoint-initdb.d/00-standins.sql
 
 INSERT INTO public.company (uid, external_id, company_name, status, is_account_completed) VALUES
-  ('mock-company', 'dev-company', 'PSB Teknoloji', 'approved', true) ON CONFLICT (uid) DO NOTHING;
+  ('mock-company', '00000000-0000-0000-0000-000000000001', 'PSB Teknoloji', 'approved', true) ON CONFLICT (uid) DO NOTHING;
 
 INSERT INTO public.employee (uid, username, name, surname, email, phone, photo_url, province, town) VALUES
   ('dev-user-1', 'dev-user-1', 'Polat', 'Kaya', 'polat@psb-tech.com', NULL, NULL, 'İstanbul', 'Şişli'),
