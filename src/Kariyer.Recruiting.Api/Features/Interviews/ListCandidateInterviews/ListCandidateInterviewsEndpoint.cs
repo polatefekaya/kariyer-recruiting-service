@@ -37,9 +37,16 @@ public sealed class ListCandidateInterviewsEndpoint : IEndpoint
             .OrderByDescending(i => i.StartsAt)
             .ToListAsync(cancellationToken);
 
-        Dictionary<string, CompanyMember> members =
-            (await directory.ListMembersAsync(company!.CompanyUid, cancellationToken))
-            .ToDictionary(m => m.Uid, StringComparer.Ordinal);
+        var memberList = await directory.ListMembersAsync(company!.CompanyUid, cancellationToken);
+        var members = new Dictionary<string, CompanyMember>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in memberList)
+        {
+            members[m.Uid] = m;
+            if (!string.IsNullOrEmpty(m.ExternalId))
+            {
+                members[m.ExternalId] = m;
+            }
+        }
 
         return Results.Ok(interviews.Select(i => i.ToDetail(members)));
     }

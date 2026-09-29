@@ -42,6 +42,7 @@ public sealed class EmployeeProjectionConfiguration : IEntityTypeConfiguration<E
         builder.HasNoKey().ToView("employee", "public");
 
         builder.Property(x => x.Uid).HasColumnName("uid");
+        builder.Property(x => x.ExternalId).HasColumnName("external_id");
         builder.Property(x => x.Username).HasColumnName("username");
         builder.Property(x => x.Name).HasColumnName("name");
         builder.Property(x => x.Surname).HasColumnName("surname");
@@ -76,6 +77,10 @@ public sealed class CompanyProjectionConfiguration : IEntityTypeConfiguration<Co
         builder.Property(x => x.Uid).HasColumnName("uid");
         builder.Property(x => x.ExternalId).HasColumnName("external_id");
         builder.Property(x => x.CompanyName).HasColumnName("company_name");
+        builder.Property(x => x.AuthorizedName).HasColumnName("authorized_name");
+        builder.Property(x => x.AuthorizedSurname).HasColumnName("authorized_surname");
+        builder.Property(x => x.Email).HasColumnName("email");
+        builder.Property(x => x.PhotoUrl).HasColumnName("photo_url");
         builder.Property(x => x.Status).HasColumnName("status");
         builder.Property(x => x.IsAccountCompleted).HasColumnName("is_account_completed");
     }

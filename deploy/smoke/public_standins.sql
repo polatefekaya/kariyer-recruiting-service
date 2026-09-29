@@ -13,12 +13,17 @@ CREATE TABLE IF NOT EXISTS public.company (
     uid                   varchar(128) PRIMARY KEY,
     external_id           uuid,
     company_name          varchar(512),
+    authorized_name       varchar(256),
+    authorized_surname    varchar(256),
+    email                 varchar(320),
+    photo_url             varchar(1000),
     status                varchar(64)  NOT NULL DEFAULT 'approved',
     is_account_completed  boolean      NOT NULL DEFAULT true
 );
 
 CREATE TABLE IF NOT EXISTS public.employee (
     uid        varchar(128) PRIMARY KEY,
+    external_id uuid,
     username   varchar(256),
     name       varchar(256),
     surname    varchar(256),

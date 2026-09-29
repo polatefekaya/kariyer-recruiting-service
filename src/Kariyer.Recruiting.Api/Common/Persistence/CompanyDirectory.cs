@@ -16,7 +16,9 @@ public sealed class CompanyDirectory(
     {
         IReadOnlyList<CompanyMember> members = await ListMembersAsync(companyUid, cancellationToken);
 
-        return members.FirstOrDefault(m => string.Equals(m.Uid, userUid, StringComparison.Ordinal));
+        return members.FirstOrDefault(m =>
+            string.Equals(m.Uid, userUid, StringComparison.OrdinalIgnoreCase) ||
+            (m.ExternalId != null && string.Equals(m.ExternalId, userUid, StringComparison.OrdinalIgnoreCase)));
     }
 
     public async Task<IReadOnlyList<CompanyMember>> ListMembersAsync(
@@ -31,16 +33,56 @@ public sealed class CompanyDirectory(
             return cached;
         }
 
-        CompanyMember[] members = await (
+        var company = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Uid == companyUid)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var list = new List<CompanyMember>();
+
+        if (company is not null)
+        {
+            string ownerName = $"{company.AuthorizedName} {company.AuthorizedSurname}".Trim();
+            if (string.IsNullOrWhiteSpace(ownerName))
+            {
+                ownerName = company.CompanyName ?? "Şirket Yöneticisi";
+            }
+
+            list.Add(new CompanyMember(
+                company.Uid,
+                ownerName,
+                "Şirket Yöneticisi",
+                company.Email,
+                company.PhotoUrl,
+                company.ExternalId?.ToString()));
+        }
+
+        var employeeMembers = await (
             from link in db.CompanyEmployees.AsNoTracking()
             join employee in db.Employees.AsNoTracking() on link.EmployeeUid equals employee.Uid
             where link.CompanyUid == companyUid && link.IsActive && link.Status == "approved"
-            select new CompanyMember(
+            select new
+            {
                 employee.Uid,
-                ((employee.Name ?? "") + " " + (employee.Surname ?? "")).Trim(),
+                employee.ExternalId,
+                Name = ((employee.Name ?? "") + " " + (employee.Surname ?? "")).Trim(),
                 link.Position,
                 employee.Email,
-                employee.PhotoUrl)).ToArrayAsync(cancellationToken);
+                employee.PhotoUrl
+            }).ToArrayAsync(cancellationToken);
+
+        foreach (var emp in employeeMembers)
+        {
+            list.Add(new CompanyMember(
+                emp.Uid,
+                string.IsNullOrWhiteSpace(emp.Name) ? (emp.Email ?? emp.Uid) : emp.Name,
+                emp.Position ?? "Ekip Üyesi",
+                emp.Email,
+                emp.PhotoUrl,
+                emp.ExternalId?.ToString()));
+        }
+
+        CompanyMember[] members = [.. list];
 
         await cache.SetAsync(
             key, members, TimeSpan.FromSeconds(options.Value.DirectoryTtlSeconds), cancellationToken);

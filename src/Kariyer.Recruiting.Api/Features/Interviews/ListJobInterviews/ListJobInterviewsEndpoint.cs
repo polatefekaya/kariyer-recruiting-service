@@ -76,7 +76,18 @@ public sealed class ListJobInterviewsHandler(
     }
 
     private async Task<IReadOnlyDictionary<string, CompanyMember>> MembersAsync(
-        string companyUid, CancellationToken cancellationToken) =>
-        (await directory.ListMembersAsync(companyUid, cancellationToken))
-        .ToDictionary(m => m.Uid, StringComparer.Ordinal);
+        string companyUid, CancellationToken cancellationToken)
+    {
+        var memberList = await directory.ListMembersAsync(companyUid, cancellationToken);
+        var members = new Dictionary<string, CompanyMember>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in memberList)
+        {
+            members[m.Uid] = m;
+            if (!string.IsNullOrEmpty(m.ExternalId))
+            {
+                members[m.ExternalId] = m;
+            }
+        }
+        return members;
+    }
 }

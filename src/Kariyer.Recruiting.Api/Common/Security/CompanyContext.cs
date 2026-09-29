@@ -54,7 +54,14 @@ public sealed class CompanyContextResolver(
         }
 
         var company = await query
-            .Select(c => new { c.Uid, c.CompanyName, c.Status, c.IsAccountCompleted })
+            .Select(c => new {
+                c.Uid,
+                c.CompanyName,
+                c.AuthorizedName,
+                c.AuthorizedSurname,
+                c.Status,
+                c.IsAccountCompleted
+            })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (company is null)
@@ -67,7 +74,13 @@ public sealed class CompanyContextResolver(
             return (null, ApiResults.Forbidden("Şirket hesabınız onaylanmadan bu işlem yapılamaz."));
         }
 
-        CompanyContext context = new(company.Uid, externalId, company.CompanyName ?? company.Uid);
+        string displayName = $"{company.AuthorizedName} {company.AuthorizedSurname}".Trim();
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            displayName = company.CompanyName ?? company.Uid;
+        }
+
+        CompanyContext context = new(company.Uid, externalId, displayName);
 
         await cache.SetAsync(key, context, CacheTtl, cancellationToken);
 

@@ -26,4 +26,4 @@ public interface ICompanyDirectory
     Task<string?> FindCompanyNameAsync(string companyUid, CancellationToken cancellationToken);
 }
 
-public sealed record CompanyMember(string Uid, string Name, string? Position, string? Email, string? PhotoUrl);
+public sealed record CompanyMember(string Uid, string Name, string? Position, string? Email, string? PhotoUrl, string? ExternalId = null);

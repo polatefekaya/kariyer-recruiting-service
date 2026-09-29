@@ -40,6 +40,8 @@ public sealed record EmployeeProjection
 {
     public string Uid { get; init; } = string.Empty;
 
+    public Guid? ExternalId { get; init; }
+
     public string? Username { get; init; }
 
     public string? Name { get; init; }
@@ -77,6 +79,14 @@ public sealed record CompanyProjection
     public Guid? ExternalId { get; init; }
 
     public string? CompanyName { get; init; }
+
+    public string? AuthorizedName { get; init; }
+
+    public string? AuthorizedSurname { get; init; }
+
+    public string? Email { get; init; }
+
+    public string? PhotoUrl { get; init; }
 
     public string Status { get; init; } = string.Empty;
 

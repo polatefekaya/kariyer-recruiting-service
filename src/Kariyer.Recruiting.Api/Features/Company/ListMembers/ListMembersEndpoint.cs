@@ -29,9 +29,10 @@ public sealed class ListMembersEndpoint : IEndpoint
 
         // The signed-in user always appears, even when the company_employee link is missing:
         // they must be selectable as the interviewer of their own invitation.
-        if (!members.Any(m => string.Equals(m.Uid, company.UserUid, StringComparison.Ordinal)))
+        if (!members.Any(m => string.Equals(m.Uid, company.UserUid, StringComparison.OrdinalIgnoreCase) ||
+                              (m.ExternalId != null && string.Equals(m.ExternalId, company.UserUid, StringComparison.OrdinalIgnoreCase))))
         {
-            members = [new CompanyMember(company.UserUid, company.UserName, null, null, null), .. members];
+            members = [new CompanyMember(company.UserUid, company.UserName, "Şirket Yöneticisi", null, null, company.UserUid), .. members];
         }
 
         return Results.Ok(members.Select(m => new

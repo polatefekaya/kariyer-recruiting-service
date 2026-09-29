@@ -68,7 +68,8 @@ public sealed class GetApplicationNoteHandler(
         }
 
         CompanyMember? author = (await directory.ListMembersAsync(company.CompanyUid, cancellationToken))
-            .FirstOrDefault(m => m.Uid == note.AuthorUid);
+            .FirstOrDefault(m => string.Equals(m.Uid, note.AuthorUid, StringComparison.OrdinalIgnoreCase) ||
+                                (m.ExternalId != null && string.Equals(m.ExternalId, note.AuthorUid, StringComparison.OrdinalIgnoreCase)));
 
         return Results.Ok(new JobNoteResponse(
             note.ApplicationUid,
