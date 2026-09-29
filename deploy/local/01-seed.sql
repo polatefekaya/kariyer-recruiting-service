@@ -53,7 +53,7 @@ INSERT INTO public.employee (uid, username, name, surname, email, phone, photo_u
   ('dev-cand-039', 'tolga39', 'Tolga', 'Ergün', 'tolga.ergün39@example.com', '+90 5xx xxx xx xx', NULL, 'Bursa', 'Çankaya')
 ON CONFLICT (uid) DO NOTHING;
 
-INSERT INTO public.company_employee (company_uid, employee_uid, position, status, is_active) VALUES
+INSERT INTO public.company_employees (company_uid, employee_uid, position, status, is_active) VALUES
   ('mock-company', 'dev-user-1', 'İK Müdürü', 'approved', true),
   ('mock-company', 'dev-user-2', 'İK Uzmanı', 'approved', true),
   ('mock-company', 'dev-user-3', 'Takım Lideri', 'approved', true)

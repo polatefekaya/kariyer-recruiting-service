@@ -57,7 +57,7 @@ public sealed class CompanyEmployeeProjectionConfiguration : IEntityTypeConfigur
 {
     public void Configure(EntityTypeBuilder<CompanyEmployeeProjection> builder)
     {
-        builder.HasNoKey().ToView("company_employee", "public");
+        builder.HasNoKey().ToView("company_employees", "public");
 
         builder.Property(x => x.CompanyUid).HasColumnName("company_uid");
         builder.Property(x => x.EmployeeUid).HasColumnName("employee_uid");

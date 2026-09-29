@@ -57,7 +57,7 @@ namespace Kariyer.Recruiting.Api.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToView("company_employee", "public");
+                    b.ToView("company_employees", "public");
                 });
 
             modelBuilder.Entity("Kariyer.Recruiting.Api.Common.Persistence.Projections.CompanyJobProjection", b =>

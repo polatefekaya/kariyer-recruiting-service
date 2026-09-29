@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.employee (
     town       varchar(256)
 );
 
-CREATE TABLE IF NOT EXISTS public.company_employee (
+CREATE TABLE IF NOT EXISTS public.company_employees (
     company_uid   varchar(128) NOT NULL,
     employee_uid  varchar(128) NOT NULL,
     position      varchar(256),

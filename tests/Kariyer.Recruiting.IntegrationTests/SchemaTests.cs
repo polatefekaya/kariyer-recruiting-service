@@ -33,7 +33,7 @@ public sealed class SchemaTests(RecruitingDatabase database)
         // endpoint checks before it will write to public at all.
         long? count = await database.ScalarAsync<long>(
             "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' " +
-            "AND table_name NOT IN ('company', 'employee', 'company_employee', 'company_job', " +
+            "AND table_name NOT IN ('company', 'employee', 'company_employees', 'company_job', " +
             "'job_application', '__standin_marker')");
 
         Assert.Equal(0, count);
