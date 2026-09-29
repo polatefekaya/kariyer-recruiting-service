@@ -496,3 +496,8 @@ src/**/Docs/
 **/bin\\Release/
 **/obj\\Debug/
 **/obj\\Release/
+# Environment files
+.env*
+!.env.example
+!.env.development.example
+!.env.production.example

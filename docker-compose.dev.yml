@@ -1,41 +1,15 @@
-# Local dependencies only: the service itself runs from the SDK (`dotnet run`), so a code change
-# is a restart rather than an image build.
+version: '3.8'
+
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: kz-recruiting-postgres
-    environment:
-      POSTGRES_DB: kariyer
-      POSTGRES_USER: kariyer
-      POSTGRES_PASSWORD: kariyer
-    ports:
-      - '5433:5432'
-    volumes:
-      - ./deploy/local:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U kariyer -d kariyer']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  garnet:
-    image: ghcr.io/microsoft/garnet:latest
-    container_name: kz-recruiting-garnet
-    ports:
-      - '6380:6379'
-    ulimits:
-      memlock: -1
-
-  # Off by default in appsettings.Development.json: the ATS screens work without it. Bring it up
-  # when you want to watch the outbox actually publish — see docs/LOCAL.md §4.
-  rabbitmq:
-    image: rabbitmq:4-management
-    container_name: kz-recruiting-rabbit
-    ports:
-      - '5673:5672'
-      - '15673:15672'
-    healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 10
+  kariyer-recruiting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GITHUB_USER: ${GITHUB_USER}
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+    container_name: kz-recruiting
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - .env.development
