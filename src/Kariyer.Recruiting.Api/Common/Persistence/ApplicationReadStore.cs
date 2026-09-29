@@ -84,7 +84,7 @@ public sealed class ApplicationReadStore(RecruitingDbContext db) : IApplicationR
                 a => a.Uid,
                 p => p.ApplicationUid,
                 (a, p) => new { a.ApplicationStatus, Pipeline = p.FirstOrDefault() })
-            .GroupBy(x => x.Pipeline != null ? x.Pipeline.Stage : x.ApplicationStatus)
+            .GroupBy(x => x.Pipeline != null ? x.Pipeline.Stage : RecruitingFunctions.StageFromLegacy(x.ApplicationStatus))
             .Select(g => new StageCount(g.Key, g.Count()))
             .ToListAsync(cancellationToken);
 
