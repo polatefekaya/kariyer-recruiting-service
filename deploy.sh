@@ -25,19 +25,33 @@ cd "$TARGET_DIR" || log_error "Failed to enter directory $TARGET_DIR"
 
 git pull --rebase || log_error "Git pull --rebase failed!"
 
+# Load environment so build args ($GITHUB_USER, $GITHUB_TOKEN) are available to compose build
+if [[ -f .env.development ]]; then
+    log_info "Loading build environment from .env.development..."
+    set -a
+    # shellcheck disable=SC1091
+    source .env.development
+    set +a
+fi
+
 BUILD_ARGS=()
 if [[ "$DO_BUILD" == true ]]; then
     BUILD_ARGS=("--build")
 fi
 
+ENV_FILE_ARG=()
+if [[ -f .env.development ]]; then
+    ENV_FILE_ARG=("--env-file" ".env.development")
+fi
+
 if [[ ${#SERVICES[@]} -eq 0 ]]; then
     log_info "Deploying ALL services..."
-    docker compose -f docker-compose.dev.yml down || true
-    docker compose -f docker-compose.dev.yml up -d "${BUILD_ARGS[@]}" --force-recreate || log_error "Docker compose up failed!"
+    docker compose "${ENV_FILE_ARG[@]}" -f docker-compose.dev.yml down || true
+    docker compose "${ENV_FILE_ARG[@]}" -f docker-compose.dev.yml up -d "${BUILD_ARGS[@]}" --force-recreate || log_error "Docker compose up failed!"
 else
     log_info "Deploying specific services: ${SERVICES[*]}..."
-    docker compose -f docker-compose.dev.yml stop "${SERVICES[@]}" || true
-    docker compose -f docker-compose.dev.yml up -d "${BUILD_ARGS[@]}" --force-recreate --no-deps "${SERVICES[@]}" || log_error "Docker compose up failed!"
+    docker compose "${ENV_FILE_ARG[@]}" -f docker-compose.dev.yml stop "${SERVICES[@]}" || true
+    docker compose "${ENV_FILE_ARG[@]}" -f docker-compose.dev.yml up -d "${BUILD_ARGS[@]}" --force-recreate --no-deps "${SERVICES[@]}" || log_error "Docker compose up failed!"
 fi
 
 docker image prune -f || true
