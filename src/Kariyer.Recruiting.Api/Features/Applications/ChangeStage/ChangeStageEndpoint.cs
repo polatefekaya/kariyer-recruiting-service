@@ -110,6 +110,11 @@ public sealed class ChangeStageHandler(
             JsonSerializer.Serialize(new { from = change.FromStage, to = change.ToStage, reason = change.Reason }),
             now));
 
+        // The mail service tells the candidate about OFFER / HIRED / REJECTED from this event alone —
+        // it has no candidate or company table — so the recipient travels with the move.
+        string companyName = await directory.FindCompanyNameAsync(summary.CompanyUid, cancellationToken)
+            ?? string.Empty;
+
         await publisher.PublishAsync(
             new ApplicationStageChangedEvent
             {
@@ -118,7 +123,10 @@ public sealed class ChangeStageHandler(
                 JobUid = summary.JobUid,
                 JobTitle = summary.JobTitle,
                 CandidateUid = summary.CandidateUid,
+                CandidateEmail = summary.CandidateEmail ?? string.Empty,
+                CandidateName = $"{summary.CandidateName} {summary.CandidateSurname}".Trim(),
                 CompanyUid = summary.CompanyUid,
+                CompanyName = companyName,
                 FromStage = change.FromStage,
                 ToStage = change.ToStage,
                 ActorUid = company.UserUid,

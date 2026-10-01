@@ -1,9 +1,11 @@
+using Kariyer.Messaging.Contracts.Recruiting;
 using Kariyer.Recruiting.Api.Common.Caching;
 using Kariyer.Recruiting.Api.Common.Configuration;
 using Kariyer.Recruiting.Api.Common.Persistence;
 using Kariyer.Recruiting.Api.Common.Security;
 using Kariyer.Recruiting.Api.Features.Interviews.ConfirmInterview;
 using Kariyer.Recruiting.Domain.Interviews;
+using Kariyer.Recruiting.Domain.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -19,6 +21,9 @@ public sealed class InterviewConfirmationTests(RecruitingDatabase database) : IA
     private const string Company = "c-confirm";
     private const string Job = "j-confirm";
     private const string Candidate = "e-confirm";
+
+    // xUnit builds a fresh instance per test, so this records one test's events only.
+    private readonly RecordingPublisher published = new();
 
     public async Task InitializeAsync() => await database.ExecuteAsync(
         $"""
@@ -56,6 +61,42 @@ public sealed class InterviewConfirmationTests(RecruitingDatabase database) : IA
 
         Assert.True(await verify.Activity.AnyAsync(
             a => a.JobUid == Job && a.Type == Domain.Activity.ActivityType.InterviewUpdated, Cancellation));
+    }
+
+    [Fact]
+    public async Task A_saved_answer_is_announced_to_the_company_side()
+    {
+        string interview = await NewInterviewAsync("announce");
+        InterviewConfirmationTokens tokens = Tokens();
+
+        await Apply(tokens, interview, ConfirmationAnswer.Decline, tokens.Issue(interview, ConfirmationAnswer.Decline));
+
+        InterviewAnsweredEvent answered = Assert.IsType<InterviewAnsweredEvent>(Assert.Single(published.Messages));
+
+        Assert.Equal(InterviewConfirmation.Declined, answered.Answer);
+        Assert.Equal(interview, answered.InterviewUid);
+        Assert.Equal("Deniz Yücel", answered.CandidateName);
+        Assert.Equal("PSB Teknoloji", answered.CompanyName);
+        Assert.Equal("Backend Developer", answered.JobTitle);
+        Assert.Equal($"https://portal.test/ilanlar/{Job}", answered.CompanyReviewUrl);
+    }
+
+    [Fact]
+    public async Task Previewing_or_repeating_an_answer_announces_nothing()
+    {
+        // Mail scanners open links, and a second click is not a new decision — neither may tell
+        // the company that the candidate answered again.
+        string interview = await NewInterviewAsync("quiet");
+        InterviewConfirmationTokens tokens = Tokens();
+        string token = tokens.Issue(interview, ConfirmationAnswer.Accept);
+
+        await Preview(tokens, interview, ConfirmationAnswer.Accept, token);
+        Assert.Empty(published.Messages);
+
+        await Apply(tokens, interview, ConfirmationAnswer.Accept, token);
+        await Apply(tokens, interview, ConfirmationAnswer.Accept, token);
+
+        Assert.Single(published.Messages);
     }
 
     [Fact]
@@ -229,6 +270,10 @@ public sealed class InterviewConfirmationTests(RecruitingDatabase database) : IA
             new InterviewRepository(db),
             new ActivityWriter(db),
             tokens,
+            new ApplicationReadStore(db),
+            new CompanyDirectory(db, new DisabledCacheStore(), GarnetOptions()),
+            published,
+            Microsoft.Extensions.Options.Options.Create(new RecruitingOptions { EmployerPortalUrl = "https://portal.test/" }),
             new CacheInvalidator(new DisabledCacheStore(), GarnetOptions()),
             new UnitOfWork(db),
             TimeProvider.System));
@@ -251,6 +296,17 @@ public sealed class InterviewConfirmationTests(RecruitingDatabase database) : IA
         Microsoft.Extensions.Options.Options.Create(new GarnetOptions { Enabled = false });
 
     private static CancellationToken Cancellation => CancellationToken.None;
+
+    private sealed class RecordingPublisher : IIntegrationEventPublisher
+    {
+        public List<object> Messages { get; } = [];
+
+        public Task PublishAsync<T>(T message, CancellationToken cancellationToken) where T : class
+        {
+            Messages.Add(message);
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider
     {
