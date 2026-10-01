@@ -23,19 +23,39 @@ public class StageTransitionTests
     public void Rejects_skipping_stages(string from, string to) =>
         Assert.Throws<InvalidStageTransitionException>(() => StageTransitions.Assert(from, to));
 
-    [Theory]
-    [InlineData(ApplicationStage.Hired)]
-    [InlineData(ApplicationStage.Rejected)]
-    [InlineData(ApplicationStage.Withdrawn)]
-    public void Terminal_stages_cannot_be_left(string terminal)
+    [Fact]
+    public void WITHDRAWN_cannot_be_left()
     {
-        Assert.Empty(StageTransitions.From(terminal));
+        Assert.Empty(StageTransitions.From(ApplicationStage.Withdrawn));
 
         foreach (string target in ApplicationStage.All)
         {
-            Assert.Throws<InvalidStageTransitionException>(() => StageTransitions.Assert(terminal, target));
+            Assert.Throws<InvalidStageTransitionException>(() => StageTransitions.Assert(ApplicationStage.Withdrawn, target));
         }
     }
+
+    [Theory]
+    [InlineData(ApplicationStage.Hired, ApplicationStage.Offer)]
+    [InlineData(ApplicationStage.Hired, ApplicationStage.Hold)]
+    [InlineData(ApplicationStage.Hired, ApplicationStage.Rejected)]
+    [InlineData(ApplicationStage.Rejected, ApplicationStage.Hold)]
+    public void A_final_decision_can_be_corrected(string from, string to) =>
+        StageTransitions.Assert(from, to);
+
+    [Theory]
+    [InlineData(ApplicationStage.Hired, ApplicationStage.New)]
+    [InlineData(ApplicationStage.Hired, ApplicationStage.Interview)]
+    [InlineData(ApplicationStage.Rejected, ApplicationStage.Interview)] // reopens through HOLD, never straight back in
+    [InlineData(ApplicationStage.Rejected, ApplicationStage.Offer)]
+    [InlineData(ApplicationStage.Rejected, ApplicationStage.Hired)]
+    public void A_correction_is_one_narrow_step(string from, string to) =>
+        Assert.Throws<InvalidStageTransitionException>(() => StageTransitions.Assert(from, to));
+
+    [Theory]
+    [InlineData(ApplicationStage.Hired)]
+    [InlineData(ApplicationStage.Rejected)]
+    public void A_correctable_final_is_still_closed(string stage) =>
+        Assert.False(ApplicationStage.IsOpen(stage));
 
     [Fact]
     public void A_no_op_move_is_not_a_transition()
