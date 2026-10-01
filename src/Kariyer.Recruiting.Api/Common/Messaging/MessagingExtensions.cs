@@ -44,6 +44,7 @@ public static class MessagingExtensions
                 cfg.Message<InterviewInvitedEvent>(m => m.SetEntityName("recruiting.interview.invited"));
                 cfg.Message<InterviewRescheduledEvent>(m => m.SetEntityName("recruiting.interview.rescheduled"));
                 cfg.Message<InterviewCancelledEvent>(m => m.SetEntityName("recruiting.interview.cancelled"));
+                cfg.Message<InterviewAnsweredEvent>(m => m.SetEntityName("recruiting.interview.answered"));
 
                 cfg.ConfigureEndpoints(context);
             });

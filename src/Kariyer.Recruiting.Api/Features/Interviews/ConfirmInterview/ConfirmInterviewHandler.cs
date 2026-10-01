@@ -1,11 +1,14 @@
 using System.Text.Json;
+using Kariyer.Messaging.Contracts.Recruiting;
 using Kariyer.Recruiting.Api.Common.Caching;
+using Kariyer.Recruiting.Api.Common.Configuration;
 using Kariyer.Recruiting.Api.Common.Persistence;
 using Kariyer.Recruiting.Api.Common.Security;
 using Kariyer.Recruiting.Domain.Activity;
 using Kariyer.Recruiting.Domain.Interviews;
 using Kariyer.Recruiting.Domain.Ports;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Kariyer.Recruiting.Api.Features.Interviews.ConfirmInterview;
 
@@ -44,6 +47,10 @@ public sealed class ConfirmInterviewHandler(
     IInterviewRepository interviews,
     IActivityWriter activity,
     InterviewConfirmationTokens tokens,
+    IApplicationReadStore readStore,
+    ICompanyDirectory directory,
+    IIntegrationEventPublisher publisher,
+    IOptions<RecruitingOptions> options,
     CacheInvalidator cache,
     IUnitOfWork unitOfWork,
     TimeProvider clock)
@@ -123,10 +130,69 @@ public sealed class ConfirmInterviewHandler(
             JsonSerializer.Serialize(new { confirmation, by = "candidate" }),
             now));
 
+        // Staged through the outbox in the same commit as the answer, so the company side hears
+        // about exactly the answers that were saved.
+        await publisher.PublishAsync(await AnsweredEventAsync(interview, confirmation, view, now, cancellationToken), cancellationToken);
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await cache.InvalidateInterviewsAsync(interview.JobUid, cancellationToken);
 
         return view with { Outcome = ConfirmationOutcome.Answered, ConfirmationStatus = confirmation };
+    }
+
+    /// <summary>
+    /// Everyone on the company side who should hear the answer: whoever created the invitation,
+    /// the interviewer, and the participants — once each, and only those with an address.
+    /// </summary>
+    private async Task<InterviewAnsweredEvent> AnsweredEventAsync(
+        Interview interview, string confirmation, ConfirmationView view, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        ApplicationSummary? summary = await readStore.FindAsync(interview.ApplicationUid, interview.CompanyUid, cancellationToken);
+
+        List<InterviewParticipantContract> recipients = [];
+
+        foreach (string userUid in new[] { interview.CreatedBy, interview.InterviewerUid }.Distinct())
+        {
+            if (string.IsNullOrWhiteSpace(userUid))
+            {
+                continue;
+            }
+
+            CompanyMember? member = await directory.FindMemberAsync(interview.CompanyUid, userUid, cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(member?.Email))
+            {
+                recipients.Add(new InterviewParticipantContract
+                {
+                    Email = member.Email,
+                    Name = member.Name,
+                    Role = userUid == interview.InterviewerUid ? "INTERVIEWER" : "RECRUITER",
+                });
+            }
+        }
+
+        recipients.AddRange(interview.Participants.Select(p =>
+            new InterviewParticipantContract { Email = p.Email, Name = p.Name ?? string.Empty, Role = p.Role }));
+
+        return new InterviewAnsweredEvent
+        {
+            MessageId = $"{interview.Uid}:{confirmation}:{now.ToUnixTimeMilliseconds()}",
+            InterviewUid = interview.Uid,
+            ApplicationUid = interview.ApplicationUid,
+            JobUid = interview.JobUid,
+            JobTitle = view.JobTitle ?? summary?.JobTitle ?? string.Empty,
+            CandidateUid = interview.CandidateUid,
+            CandidateName = summary is null ? string.Empty : $"{summary.CandidateName} {summary.CandidateSurname}".Trim(),
+            CompanyUid = interview.CompanyUid,
+            CompanyName = view.CompanyName ?? string.Empty,
+            Answer = confirmation,
+            StartsAt = interview.StartsAt,
+            TimeZone = interview.TimeZone,
+            Type = interview.Type,
+            Recipients = [.. recipients.DistinctBy(r => r.Email.Trim().ToLowerInvariant())],
+            CompanyReviewUrl = $"{options.Value.EmployerPortalUrl.TrimEnd('/')}/ilanlar/{Uri.EscapeDataString(interview.JobUid)}",
+            AnsweredAt = now,
+        };
     }
 
     private async Task<ConfirmationView> DescribeAsync(

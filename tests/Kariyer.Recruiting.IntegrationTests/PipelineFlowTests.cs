@@ -1,3 +1,4 @@
+using Kariyer.Messaging.Contracts.Recruiting;
 using Kariyer.Recruiting.Api.Common.Caching;
 using Kariyer.Recruiting.Api.Common.Configuration;
 using Kariyer.Recruiting.Api.Common.Persistence;
@@ -19,6 +20,9 @@ public sealed class PipelineFlowTests(RecruitingDatabase database) : IAsyncLifet
     private const string Job = "j-flow";
     private const string Candidate = "e-flow";
     private const string Application = "a-flow";
+
+    // xUnit builds a fresh instance per test, so this records one test's events only.
+    private readonly RecordingPublisher published = new();
 
     /// <summary>
     /// One application per test. They share a database, so a test that moves the fixture row
@@ -132,6 +136,29 @@ public sealed class PipelineFlowTests(RecruitingDatabase database) : IAsyncLifet
             await verify.Pipelines.Where(p => p.ApplicationUid == application)
                 .Select(p => p.Stage)
                 .SingleAsync(Cancellation));
+    }
+
+    [Fact]
+    public async Task A_move_carries_who_the_candidate_is_so_mail_can_reach_them()
+    {
+        // The mail service has no candidate or company table: the decision mails for OFFER /
+        // HIRED / REJECTED can only be sent if the recipient travels on the event itself.
+        string application = await NewApplicationAsync("recipient");
+
+        await using RecruitingDbContext db = database.CreateContext();
+
+        await Handler(db).HandleAsync(
+            application,
+            new ChangeStageRequest(ApplicationStage.Rejected, null),
+            new CompanyContext(Company, "u-1", "Polat Kaya"),
+            Cancellation);
+
+        ApplicationStageChangedEvent moved = Assert.IsType<ApplicationStageChangedEvent>(Assert.Single(published.Messages));
+
+        Assert.Equal(ApplicationStage.Rejected, moved.ToStage);
+        Assert.Equal("ayse@example.com", moved.CandidateEmail);
+        Assert.Equal("Ayşe Şimşek", moved.CandidateName);
+        Assert.Equal("PSB Teknoloji", moved.CompanyName);
     }
 
     [Fact]
@@ -259,7 +286,7 @@ public sealed class PipelineFlowTests(RecruitingDatabase database) : IAsyncLifet
         new ApplicationReadStore(db),
         new ApplicationPipelineRepository(db),
         new ActivityWriter(db),
-        new NoOpPublisher(),
+        published,
         new CompanyDirectory(db, new DisabledCacheStore(), GarnetOptions()),
         Invalidator(),
         new UnitOfWork(db),
@@ -274,10 +301,15 @@ public sealed class PipelineFlowTests(RecruitingDatabase database) : IAsyncLifet
     private static int StatusOf(IResult result) =>
         result.GetType().GetProperty("StatusCode")?.GetValue(result) as int? ?? 200;
 
-    private sealed class NoOpPublisher : IIntegrationEventPublisher
+    private sealed class RecordingPublisher : IIntegrationEventPublisher
     {
-        public Task PublishAsync<T>(T message, CancellationToken cancellationToken) where T : class =>
-            Task.CompletedTask;
+        public List<object> Messages { get; } = [];
+
+        public Task PublishAsync<T>(T message, CancellationToken cancellationToken) where T : class
+        {
+            Messages.Add(message);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class DummyMeterFactory : IMeterFactory

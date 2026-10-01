@@ -16,6 +16,12 @@ public sealed class RecruitingOptions
     public string PublicSiteUrl { get; init; } = "https://kariyerzamani.com";
 
     /// <summary>
+    /// Base URL of the employer portal (kariyer-basvuru-web), used for the links in mails that go
+    /// to the company side — e.g. a candidate's answer to an interview invitation.
+    /// </summary>
+    public string EmployerPortalUrl { get; init; } = "https://basvurular.kariyerzamani.com";
+
+    /// <summary>
     /// Public base URL of this service. The accept/decline links resolve here: the confirmation
     /// page is served by the service itself so the link works in any mail client, with no session.
     /// </summary>

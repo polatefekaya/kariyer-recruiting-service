@@ -47,7 +47,10 @@ public static class ApplicationStage
         [Withdrawn] = "Geri çekildi",
     };
 
-    /// <summary>Stages nothing can leave.</summary>
+    /// <summary>
+    /// Stages where the process has ended. HIRED and REJECTED can still be corrected (see
+    /// <see cref="StageTransitions"/>), but while an application sits in one it is closed.
+    /// </summary>
     private static readonly HashSet<string> Terminal = new(StringComparer.Ordinal)
     {
         Hired, Rejected, Withdrawn

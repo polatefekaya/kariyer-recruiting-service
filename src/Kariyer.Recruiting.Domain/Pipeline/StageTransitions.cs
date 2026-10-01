@@ -5,8 +5,12 @@ namespace Kariyer.Recruiting.Domain.Pipeline;
 ///
 /// Enforced HERE rather than only in the UI because the frontend's job is to hide impossible
 /// buttons, not to guarantee the pipeline. Two recruiters working the same candidate, a stale
-/// tab, a retried request or a direct API call all produce moves the UI would never offer, and
-/// a pipeline that can be walked backwards out of HIRED is a pipeline nobody can report on.
+/// tab, a retried request or a direct API call all produce moves the UI would never offer.
+///
+/// HIRED and REJECTED are final but correctable: a recruiter who marks the wrong person hired,
+/// or rejects the wrong row, must be able to put it back. The way back is deliberately narrow —
+/// one step to where the decision was made (OFFER) or to the parking space (HOLD) — so a
+/// correction is a visible, logged move rather than a free walk that makes the funnel unreadable.
 /// </summary>
 public static class StageTransitions
 {
@@ -31,8 +35,15 @@ public static class StageTransitions
             ApplicationStage.Interview, ApplicationStage.Rejected
         ],
 
-        [ApplicationStage.Hired] = [],
-        [ApplicationStage.Rejected] = [],
+        // A mistaken hire goes back to the offer it came from, is parked, or is turned into the
+        // rejection it should have been.
+        [ApplicationStage.Hired] =
+            [ApplicationStage.Offer, ApplicationStage.Hold, ApplicationStage.Rejected],
+
+        // A mistaken rejection reopens into HOLD only. Which stage the candidate really belongs
+        // in is a second, deliberate move from there — REJECTED does not remember where it came
+        // from, and guessing would put people back into an interview nobody scheduled.
+        [ApplicationStage.Rejected] = [ApplicationStage.Hold],
 
         // Only the candidate withdraws, and only the candidate-facing service does that; from
         // this side it is a dead end in both directions.
