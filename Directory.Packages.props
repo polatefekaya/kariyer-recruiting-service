@@ -13,7 +13,7 @@
          Consumed from GitHub Packages like every other service, never as a ProjectReference to
          the local contracts checkout: the servers restore from the feed, and a local project
          link would let this build against types that are not on the registry yet. -->
-    <PackageVersion Include="Kariyer.Messaging.Contracts" Version="1.4.0" />
+    <PackageVersion Include="Kariyer.Messaging.Contracts" Version="1.5.0" />
   </ItemGroup>
 
   <ItemGroup Label="Messaging">

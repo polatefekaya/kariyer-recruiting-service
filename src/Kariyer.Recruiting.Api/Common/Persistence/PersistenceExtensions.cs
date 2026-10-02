@@ -30,6 +30,7 @@ public static class PersistenceExtensions
         services.AddScoped<IInterviewRepository, InterviewRepository>();
         services.AddScoped<IApplicationNoteRepository, ApplicationNoteRepository>();
         services.AddScoped<IActivityWriter, ActivityWriter>();
+        services.AddScoped<ICandidateMessageRepository, CandidateMessageRepository>();
         services.AddScoped<ISavedFilterRepository, SavedFilterRepository>();
         services.AddScoped<IApplicationReadStore, ApplicationReadStore>();
         services.AddScoped<ICompanyDirectory, CompanyDirectory>();

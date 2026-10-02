@@ -120,8 +120,42 @@ public sealed record ApplicationSummary
 }
 
 /// <summary>Reads that join this service's schema with the read-only projections.</summary>
+/// <summary>One applicant a company could message: who, where they stand, and what they already received.</summary>
+public sealed record MessageAudienceRow
+{
+    public required string ApplicationUid { get; init; }
+
+    public required string CandidateUid { get; init; }
+
+    public string? CandidateName { get; init; }
+
+    public string? CandidateSurname { get; init; }
+
+    public string? CandidateEmail { get; init; }
+
+    public string? CandidatePhotoUrl { get; init; }
+
+    public required string Stage { get; init; }
+
+    public DateTimeOffset? LastMessagedAt { get; init; }
+
+    public int MessageCount { get; init; }
+}
+
 public interface IApplicationReadStore
 {
+    /// <summary>
+    /// A posting's applicants a company can message, optionally narrowed to some stages and/or
+    /// to specific applications. Company-scoped like every other read: an application of another
+    /// company's posting is simply not there.
+    /// </summary>
+    Task<IReadOnlyList<MessageAudienceRow>> AudienceAsync(
+        string jobUid,
+        string companyUid,
+        IReadOnlyCollection<string>? stages,
+        IReadOnlyCollection<string>? applicationUids,
+        CancellationToken cancellationToken);
+
     Task<ApplicationPage> ListAsync(ApplicationListQuery query, CancellationToken cancellationToken);
 
     Task<IReadOnlyDictionary<string, int>> StatsAsync(

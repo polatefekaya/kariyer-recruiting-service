@@ -40,10 +40,7 @@ public sealed record ChangeStageResponse(string ApplicationUid, string Stage, st
 
 public sealed class ChangeStageHandler(
     IApplicationReadStore readStore,
-    IApplicationPipelineRepository pipelines,
-    IActivityWriter activity,
-    IIntegrationEventPublisher publisher,
-    ICompanyDirectory directory,
+    StageMoveHandler mover,
     CacheInvalidator cache,
     IUnitOfWork unitOfWork,
     RecruitingMetrics metrics,
@@ -72,9 +69,55 @@ public sealed class ChangeStageHandler(
             return ApiResults.NotFound();
         }
 
-        DateTimeOffset now = clock.GetUtcNow();
+        StageMove move;
 
-        ApplicationPipeline? pipeline = await pipelines.FindAsync(applicationUid, cancellationToken);
+        try
+        {
+            move = await mover.MoveAsync(summary, target, request.Reason, company, clock.GetUtcNow(), cancellationToken);
+        }
+        catch (InvalidStageTransitionException exception)
+        {
+            return ApiResults.InvalidTransition(exception);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await cache.InvalidateJobAsync(summary.JobUid, cancellationToken);
+
+        metrics.StageChanged(move.Change.FromStage, move.Change.ToStage);
+
+        return Results.Ok(new ChangeStageResponse(
+            summary.ApplicationUid,
+            move.Pipeline.Stage,
+            ApplicationStage.Label(move.Pipeline.Stage),
+            StageTransitions.From(move.Pipeline.Stage)));
+    }
+}
+
+public sealed record StageMove(ApplicationPipeline Pipeline, StageChanged Change);
+
+/// <summary>
+/// One pipeline move, staged but not saved: the pipeline row (started from the legacy status on
+/// first touch), the activity entry and the outbox event. Shared by the single and the bulk
+/// endpoint so a move means the same thing whichever way it was made; the caller commits.
+/// </summary>
+public sealed class StageMoveHandler(
+    IApplicationPipelineRepository pipelines,
+    IActivityWriter activity,
+    IIntegrationEventPublisher publisher,
+    ICompanyDirectory directory)
+{
+    private string? _companyName;
+
+    /// <exception cref="InvalidStageTransitionException">The move is not one the pipeline allows.</exception>
+    public async Task<StageMove> MoveAsync(
+        ApplicationSummary summary,
+        string target,
+        string? reason,
+        CompanyContext company,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        ApplicationPipeline? pipeline = await pipelines.FindAsync(summary.ApplicationUid, cancellationToken);
 
         if (pipeline is null)
         {
@@ -89,16 +132,7 @@ public sealed class ChangeStageHandler(
             pipelines.Add(pipeline);
         }
 
-        StageChanged change;
-
-        try
-        {
-            change = pipeline.MoveTo(target, company.UserUid, request.Reason, now);
-        }
-        catch (InvalidStageTransitionException exception)
-        {
-            return ApiResults.InvalidTransition(exception);
-        }
+        StageChanged change = pipeline.MoveTo(target, company.UserUid, reason, now);
 
         activity.Write(ActivityEntry.Create(
             summary.ApplicationUid,
@@ -112,8 +146,7 @@ public sealed class ChangeStageHandler(
 
         // The mail service tells the candidate about OFFER / HIRED / REJECTED from this event alone —
         // it has no candidate or company table — so the recipient travels with the move.
-        string companyName = await directory.FindCompanyNameAsync(summary.CompanyUid, cancellationToken)
-            ?? string.Empty;
+        _companyName ??= await directory.FindCompanyNameAsync(summary.CompanyUid, cancellationToken) ?? string.Empty;
 
         await publisher.PublishAsync(
             new ApplicationStageChangedEvent
@@ -126,7 +159,7 @@ public sealed class ChangeStageHandler(
                 CandidateEmail = summary.CandidateEmail ?? string.Empty,
                 CandidateName = $"{summary.CandidateName} {summary.CandidateSurname}".Trim(),
                 CompanyUid = summary.CompanyUid,
-                CompanyName = companyName,
+                CompanyName = _companyName,
                 FromStage = change.FromStage,
                 ToStage = change.ToStage,
                 ActorUid = company.UserUid,
@@ -135,15 +168,6 @@ public sealed class ChangeStageHandler(
             },
             cancellationToken);
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        await cache.InvalidateJobAsync(summary.JobUid, cancellationToken);
-
-        metrics.StageChanged(change.FromStage, change.ToStage);
-
-        return Results.Ok(new ChangeStageResponse(
-            summary.ApplicationUid,
-            pipeline.Stage,
-            ApplicationStage.Label(pipeline.Stage),
-            StageTransitions.From(pipeline.Stage)));
+        return new StageMove(pipeline, change);
     }
 }

@@ -237,6 +237,68 @@ public sealed class ApplicationReadStore(RecruitingDbContext db) : IApplicationR
             .ThenBy(x => x.Application.Uid),
     };
 
+    public async Task<IReadOnlyList<MessageAudienceRow>> AudienceAsync(
+        string jobUid,
+        string companyUid,
+        IReadOnlyCollection<string>? stages,
+        IReadOnlyCollection<string>? applicationUids,
+        CancellationToken cancellationToken)
+    {
+        IQueryable<Source> source = Filter(new ApplicationListQuery { JobUid = jobUid, CompanyUid = companyUid });
+
+        if (stages is { Count: > 0 })
+        {
+            source = source.Where(x => stages.Contains(x.Stage));
+        }
+
+        if (applicationUids is not null)
+        {
+            source = source.Where(x => applicationUids.Contains(x.Application.Uid));
+        }
+
+        var rows = await Sort(source, ApplicationSort.AppliedAtDesc)
+            .Select(x => new
+            {
+                x.Application.Uid,
+                x.Application.ApplicantUid,
+                x.Candidate.Name,
+                x.Candidate.Surname,
+                x.Candidate.Email,
+                x.Candidate.PhotoUrl,
+                x.Stage,
+            })
+            .ToListAsync(cancellationToken);
+
+        string[] uids = [.. rows.Select(r => r.Uid)];
+
+        var messaged = uids.Length == 0
+            ? []
+            : await db.Activity
+                .AsNoTracking()
+                .Where(a => uids.Contains(a.ApplicationUid) && a.Type == Domain.Activity.ActivityType.MessageSent)
+                .GroupBy(a => a.ApplicationUid)
+                .Select(g => new { ApplicationUid = g.Key, LastAt = g.Max(a => a.CreatedAt), Count = g.Count() })
+                .ToListAsync(cancellationToken);
+
+        var byApplication = messaged.ToDictionary(m => m.ApplicationUid, StringComparer.Ordinal);
+
+        return
+        [
+            .. rows.Select(r => new MessageAudienceRow
+            {
+                ApplicationUid = r.Uid,
+                CandidateUid = r.ApplicantUid,
+                CandidateName = r.Name,
+                CandidateSurname = r.Surname,
+                CandidateEmail = r.Email,
+                CandidatePhotoUrl = r.PhotoUrl,
+                Stage = r.Stage,
+                LastMessagedAt = byApplication.TryGetValue(r.Uid, out var m) ? m.LastAt : null,
+                MessageCount = byApplication.TryGetValue(r.Uid, out var n) ? n.Count : 0,
+            }),
+        ];
+    }
+
     private async Task<Dictionary<string, InterviewSummary>> NextInterviewsAsync(
         string[] applicationUids, CancellationToken cancellationToken)
     {
