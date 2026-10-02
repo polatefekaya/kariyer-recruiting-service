@@ -31,6 +31,11 @@ public interface IApplicationNoteRepository
     void Remove(ApplicationNote note);
 }
 
+public interface ICandidateMessageRepository
+{
+    void Add(Messaging.CandidateMessage message);
+}
+
 public interface IActivityWriter
 {
     void Write(ActivityEntry entry);

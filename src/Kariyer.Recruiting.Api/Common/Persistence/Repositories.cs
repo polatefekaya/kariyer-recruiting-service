@@ -42,6 +42,11 @@ public sealed class ApplicationNoteRepository(RecruitingDbContext db) : IApplica
     public void Remove(ApplicationNote note) => db.Notes.Remove(note);
 }
 
+public sealed class CandidateMessageRepository(RecruitingDbContext db) : ICandidateMessageRepository
+{
+    public void Add(Domain.Messaging.CandidateMessage message) => db.Messages.Add(message);
+}
+
 public sealed class ActivityWriter(RecruitingDbContext db) : IActivityWriter
 {
     public void Write(ActivityEntry entry) => db.Activity.Add(entry);

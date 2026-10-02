@@ -102,6 +102,27 @@ public sealed class ApplicationNoteConfiguration : IEntityTypeConfiguration<Appl
     }
 }
 
+public sealed class CandidateMessageConfiguration : IEntityTypeConfiguration<Domain.Messaging.CandidateMessage>
+{
+    public void Configure(EntityTypeBuilder<Domain.Messaging.CandidateMessage> builder)
+    {
+        builder.ToTable("candidate_message");
+        builder.HasKey(x => x.Uid);
+
+        builder.Property(x => x.Uid).HasColumnName("uid").HasMaxLength(128);
+        builder.Property(x => x.JobUid).HasColumnName("job_uid").HasMaxLength(128);
+        builder.Property(x => x.CompanyUid).HasColumnName("company_uid").HasMaxLength(128);
+        builder.Property(x => x.Subject).HasColumnName("subject").HasMaxLength(150);
+        builder.Property(x => x.Body).HasColumnName("body").HasMaxLength(2000);
+        builder.Property(x => x.SentByUid).HasColumnName("sent_by").HasMaxLength(128);
+        builder.Property(x => x.SentByName).HasColumnName("sent_by_name").HasMaxLength(256);
+        builder.Property(x => x.RecipientCount).HasColumnName("recipient_count");
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(x => new { x.JobUid, x.CreatedAt }).HasDatabaseName("ix_message_job_created");
+    }
+}
+
 public sealed class ActivityEntryConfiguration : IEntityTypeConfiguration<ActivityEntry>
 {
     public void Configure(EntityTypeBuilder<ActivityEntry> builder)

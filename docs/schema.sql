@@ -295,15 +295,6 @@ BEGIN
             ELSE 'NEW'
         END;
     $$;
-
-    CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value anyelement)
-    RETURNS text
-    LANGUAGE sql
-    IMMUTABLE
-    PARALLEL SAFE
-    AS $$
-        SELECT recruiting.kz_stage_from_legacy(value::text);
-    $$;
     END IF;
 END $EF$;
 
@@ -433,6 +424,107 @@ BEGIN
     IF NOT EXISTS(SELECT 1 FROM recruiting."__EFMigrationsHistory" WHERE "MigrationId" = '20260924144250_TransactionalOutbox') THEN
     INSERT INTO recruiting."__EFMigrationsHistory" ("MigrationId", "ProductVersion")
     VALUES ('20260924144250_TransactionalOutbox', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM recruiting."__EFMigrationsHistory" WHERE "MigrationId" = '20260929114002_FixLegacyStageFunctionEnum') THEN
+    CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value text)
+    RETURNS text
+    LANGUAGE sql
+    IMMUTABLE
+    PARALLEL SAFE
+    AS $$
+        SELECT CASE lower(coalesce(value, ''))
+            WHEN 'pending'      THEN 'NEW'
+            WHEN 'under_review' THEN 'REVIEWING'
+            WHEN 'accepted'     THEN 'HIRED'
+            WHEN 'rejected'     THEN 'REJECTED'
+            WHEN 'withdrawn'    THEN 'WITHDRAWN'
+            ELSE 'NEW'
+        END;
+    $$;
+
+    CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value anyelement)
+    RETURNS text
+    LANGUAGE sql
+    IMMUTABLE
+    PARALLEL SAFE
+    AS $$
+        SELECT recruiting.kz_stage_from_legacy(value::text);
+    $$;
+
+    DO $$
+    DECLARE
+        v_schema text;
+    BEGIN
+        SELECT n.nspname INTO v_schema
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'enum_job_application_application_status'
+        LIMIT 1;
+
+        IF v_schema IS NOT NULL THEN
+            EXECUTE format('
+                CREATE OR REPLACE FUNCTION recruiting.kz_stage_from_legacy(value %I.enum_job_application_application_status)
+                RETURNS text
+                LANGUAGE sql
+                IMMUTABLE
+                PARALLEL SAFE
+                AS $func$
+                    SELECT recruiting.kz_stage_from_legacy(value::text);
+                $func$;
+            ', v_schema);
+        END IF;
+    END $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM recruiting."__EFMigrationsHistory" WHERE "MigrationId" = '20260929114002_FixLegacyStageFunctionEnum') THEN
+    INSERT INTO recruiting."__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260929114002_FixLegacyStageFunctionEnum', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM recruiting."__EFMigrationsHistory" WHERE "MigrationId" = '20261002105529_CandidateMessages') THEN
+    CREATE TABLE recruiting.candidate_message (
+        uid character varying(128) NOT NULL,
+        job_uid character varying(128) NOT NULL,
+        company_uid character varying(128) NOT NULL,
+        subject character varying(150),
+        body character varying(2000) NOT NULL,
+        sent_by character varying(128) NOT NULL,
+        sent_by_name character varying(256),
+        recipient_count integer NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_candidate_message" PRIMARY KEY (uid)
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM recruiting."__EFMigrationsHistory" WHERE "MigrationId" = '20261002105529_CandidateMessages') THEN
+    CREATE INDEX ix_message_job_created ON recruiting.candidate_message (job_uid, created_at);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM recruiting."__EFMigrationsHistory" WHERE "MigrationId" = '20261002105529_CandidateMessages') THEN
+    INSERT INTO recruiting."__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261002105529_CandidateMessages', '10.0.4');
     END IF;
 END $EF$;
 COMMIT;

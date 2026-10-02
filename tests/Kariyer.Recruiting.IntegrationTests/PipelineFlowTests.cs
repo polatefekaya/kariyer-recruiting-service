@@ -3,6 +3,7 @@ using Kariyer.Recruiting.Api.Common.Caching;
 using Kariyer.Recruiting.Api.Common.Configuration;
 using Kariyer.Recruiting.Api.Common.Persistence;
 using Kariyer.Recruiting.Api.Common.Security;
+using Kariyer.Recruiting.Api.Features.Applications.BulkChangeStage;
 using Kariyer.Recruiting.Api.Features.Applications.ChangeStage;
 using Kariyer.Recruiting.Api.Features.Applications.SaveNote;
 using Kariyer.Recruiting.Domain.Interviews;
@@ -162,6 +163,40 @@ public sealed class PipelineFlowTests(RecruitingDatabase database) : IAsyncLifet
     }
 
     [Fact]
+    public async Task A_bulk_move_moves_what_it_can_and_reports_the_rest()
+    {
+        // A selection that spans stages is the normal case: NEW and REVIEWING can both be
+        // rejected, HIRED cannot reach REVIEWING, and an application of another company is
+        // simply not there. None of that may stop the others from moving.
+        string fresh = await NewApplicationAsync("bulk-new");
+        string reviewing = await NewApplicationAsync("bulk-reviewing", "under_review");
+        string hired = await NewApplicationAsync("bulk-hired", "accepted");
+
+        await using RecruitingDbContext db = database.CreateContext();
+
+        IResult result = await BulkHandler(db).HandleAsync(
+            new BulkChangeStageRequest([fresh, reviewing, hired, "a-not-ours"], ApplicationStage.Contact, null),
+            new CompanyContext(Company, "u-1", "Polat Kaya"),
+            Cancellation);
+
+        BulkChangeStageResponse body = Assert.IsType<BulkChangeStageResponse>(ValueOf(result));
+
+        Assert.Equal([fresh, reviewing], body.Moved.Select(m => m.ApplicationUid).Order());
+        Assert.All(body.Moved, m => Assert.Equal(ApplicationStage.Contact, m.Stage));
+        Assert.Contains(body.Skipped, s => s.ApplicationUid == hired && s.Reason == BulkChangeStageHandler.InvalidTransition);
+        Assert.Contains(body.Skipped, s => s.ApplicationUid == "a-not-ours" && s.Reason == BulkChangeStageHandler.NotFound);
+
+        // Every move is announced, exactly as a single move would be.
+        Assert.Equal(2, published.Messages.OfType<ApplicationStageChangedEvent>().Count());
+
+        await using RecruitingDbContext verify = database.CreateContext();
+
+        Assert.Equal(
+            ApplicationStage.Contact,
+            await verify.Pipelines.Where(p => p.ApplicationUid == reviewing).Select(p => p.Stage).SingleAsync(Cancellation));
+    }
+
+    [Fact]
     public async Task An_illegal_move_is_rejected_with_409()
     {
         string application = await NewApplicationAsync("illegal");
@@ -284,19 +319,33 @@ public sealed class PipelineFlowTests(RecruitingDatabase database) : IAsyncLifet
 
     private ChangeStageHandler Handler(RecruitingDbContext db) => new(
         new ApplicationReadStore(db),
-        new ApplicationPipelineRepository(db),
-        new ActivityWriter(db),
-        published,
-        new CompanyDirectory(db, new DisabledCacheStore(), GarnetOptions()),
+        Mover(db),
         Invalidator(),
         new UnitOfWork(db),
         new Api.Common.Telemetry.RecruitingMetrics(new DummyMeterFactory()),
         TimeProvider.System);
 
+    private BulkChangeStageHandler BulkHandler(RecruitingDbContext db) => new(
+        new ApplicationReadStore(db),
+        Mover(db),
+        Invalidator(),
+        new UnitOfWork(db),
+        new Api.Common.Telemetry.RecruitingMetrics(new DummyMeterFactory()),
+        TimeProvider.System);
+
+    private StageMoveHandler Mover(RecruitingDbContext db) => new(
+        new ApplicationPipelineRepository(db),
+        new ActivityWriter(db),
+        published,
+        new CompanyDirectory(db, new DisabledCacheStore(), GarnetOptions()));
+
     private static CacheInvalidator Invalidator() => new(new DisabledCacheStore(), GarnetOptions());
 
     private static IOptions<GarnetOptions> GarnetOptions() =>
         Microsoft.Extensions.Options.Options.Create(new GarnetOptions { Enabled = false });
+
+    private static object? ValueOf(IResult result) =>
+        result.GetType().GetProperty("Value")?.GetValue(result);
 
     private static int StatusOf(IResult result) =>
         result.GetType().GetProperty("StatusCode")?.GetValue(result) as int? ?? 200;

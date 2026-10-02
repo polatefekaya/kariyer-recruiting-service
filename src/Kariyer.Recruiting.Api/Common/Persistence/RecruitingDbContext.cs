@@ -21,6 +21,8 @@ public sealed class RecruitingDbContext(DbContextOptions<RecruitingDbContext> op
 
     public DbSet<ActivityEntry> Activity => Set<ActivityEntry>();
 
+    public DbSet<Domain.Messaging.CandidateMessage> Messages => Set<Domain.Messaging.CandidateMessage>();
+
     public DbSet<SavedFilter> SavedFilters => Set<SavedFilter>();
 
     public DbSet<JobApplicationProjection> JobApplications => Set<JobApplicationProjection>();
